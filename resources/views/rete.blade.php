@@ -4,7 +4,6 @@
 <head>
     <title>Flow Visualizer</title>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
     <link rel="stylesheet" href="{{ asset('css/flow.css') }}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -14,7 +13,6 @@
     <div id="toolbar">
         <h1><i class="fa-solid fa-diagram-project"></i> LiteGraph Flow</h1>
         <div class="toolbar-spacer"></div>
-        <button class="toolbar-btn" id="btn-run-flow"><i class="fa fa-play"></i>Start Flow</button>
     </div>
     <div id="app">
         <div id="sidebar">
@@ -50,6 +48,8 @@
         <button id="btn-save-node"><i class="fa fa-save"></i>Save</button>
     </div>
     <div id="zoom-controls">
+        <button title="Start Flow" id="btn-start-flow"><i class="fa fa-play"></i></button>
+        <button title="Delete Node" id="btn-delete-node"><i class="fa fa-trash"></i></button>
         <button title="Zoom In" id="btn-zoom-in"><i class="fa fa-plus"></i></button>
         <button title="Zoom Out" id="btn-zoom-out"><i class="fa fa-minus"></i></button>
         <button title="Reset View" id="btn-reset-view"><i class="fa fa-crosshairs"></i></button>
@@ -68,15 +68,10 @@
     <script src="{{ asset('js/flow.js') }}"></script>
     <script>
         // Toolbar buttons
-        document.getElementById('btn-run-flow').onclick = runFlowFromInputs;
+        document.getElementById('btn-start-flow').onclick = runFlowFromInputs;
         document.getElementById('btn-zoom-in').onclick = zoomIn;
         document.getElementById('btn-zoom-out').onclick = zoomOut;
         document.getElementById('btn-reset-view').onclick = resetZoom;
-        // ✅ FIXED: Button Save handler for modal
-        window.addEventListener("load", () => {
-            initMinimap();
-            document.getElementById("btn-save-node").onclick = saveNodeValue;
-        });
     </script>
     <script>
         const dragPreview = document.getElementById("drag-preview");
@@ -188,17 +183,13 @@
             canvas.setDirty(true, true);
             currentDraggingType = null;
         });
-        const originalRefresh = refreshNodeTypeSelect;
-        refreshNodeTypeSelect = function() {
-            originalRefresh?.();
+
+        function refreshNodeTypeSelect() {
             renderNodeGrid();
-        };
+        }
         window.addEventListener("load", () => {
             initMinimap();
         });
-        let touchStartTime = 0;
-        let touchStartX = 0;
-        let touchStartY = 0;
         canvas.canvas.addEventListener("touchstart", (e) => {
             touchStartTime = Date.now();
             touchStartX = e.touches[0].clientX;
@@ -238,9 +229,15 @@
         });
     </script>
     <script>
-        // ========== Mobile Touch Drag for Nodes ==========
+        // ========== Core Canvas Interaction ==========
         let touchDraggingNode = null;
         let touchOffset = [0, 0];
+        let pendingConnection = null;
+        let connectMode = {
+            fromNode: null,
+            fromSlot: null
+        };
+        canvas.ds.allow_interaction = true;
         canvas.convertEventToCanvasCoords = function(e) {
             const rect = canvas.canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -249,7 +246,9 @@
             const offset = canvas.ds.offset;
             return [(x - offset[0]) / scale, (y - offset[1]) / scale];
         };
+        // ========== Drag Node ==========
         canvas.canvas.addEventListener("touchstart", function(e) {
+            if (e.touches.length !== 1) return;
             const touch = e.touches[0];
             const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
             const node = graph.getNodeOnPos(cx, cy, 10, true);
@@ -277,7 +276,45 @@
         }, {
             passive: false
         });
-        // Mouse event spoofing to make LiteGraph react to touches
+        // ========== Tap-to-Connect Shortcut ==========
+        canvas.canvas.addEventListener("touchend", function(e) {
+            const touch = e.changedTouches[0];
+            const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
+            const node = graph.getNodeOnPos(cx, cy, 10, true);
+            if (!node) return;
+            const slot = canvas.getSlotOnPos(cx, cy);
+            if (slot) {
+                if (slot[0] === LiteGraph.OUTPUT) {
+                    connectMode.fromNode = node;
+                    connectMode.fromSlot = slot[1];
+                    canvas.selectNode(node);
+                    e.preventDefault();
+                    return;
+                } else if (slot[0] === LiteGraph.INPUT && connectMode.fromNode) {
+                    connectMode.fromNode.connect(connectMode.fromSlot, node, slot[1]);
+                    canvas.setDirty(true, true);
+                    connectMode = {
+                        fromNode: null,
+                        fromSlot: null
+                    };
+                    e.preventDefault();
+                    return;
+                }
+            }
+            // Fallback: tap node → if already selecting from, connect to first input
+            if (connectMode.fromNode && connectMode.fromNode.id !== node.id) {
+                connectMode.fromNode.connect(connectMode.fromSlot || 0, node, 0);
+                canvas.setDirty(true, true);
+                connectMode = {
+                    fromNode: null,
+                    fromSlot: null
+                };
+                e.preventDefault();
+            }
+        }, {
+            passive: false
+        });
+        // ========== Spoof Mouse Events ==========
         ["touchstart", "touchmove", "touchend"].forEach(type => {
             canvas.canvas.addEventListener(type, e => {
                 const touch = e.changedTouches[0];
@@ -297,91 +334,51 @@
                 passive: false
             });
         });
-        // Aktifkan interaksi canvas
-        canvas.ds.allow_interaction = true;
-        // ========== Nonaktifkan Pinch Zoom Page ==========
+        // ========== Disable Browser Zoom ==========
         document.addEventListener("gesturestart", e => e.preventDefault());
         document.addEventListener("gesturechange", e => e.preventDefault());
         document.addEventListener("gestureend", e => e.preventDefault());
-        // ========== Tap-to-Connect Mode ==========
-        let pendingConnection = null;
-        canvas.canvas.addEventListener("touchend", function(e) {
-            const touch = e.changedTouches[0];
-            const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
-            const node = graph.getNodeOnPos(cx, cy, 10, true);
-            if (!node) return;
-            const slot = canvas.getSlotOnPos(cx, cy);
-            if (!slot) return;
-            if (slot[0] === LiteGraph.OUTPUT) {
-                // Simpan output
-                pendingConnection = {
-                    node,
-                    slotIndex: slot[1]
-                };
-            } else if (slot[0] === LiteGraph.INPUT && pendingConnection) {
-                // Sambungkan dari pending output ke input
-                const inputNode = node;
-                const inputSlot = slot[1];
-                pendingConnection.node.connect(pendingConnection.slotIndex, inputNode, inputSlot);
-                canvas.setDirty(true, true);
-                pendingConnection = null;
-            }
-        }, {
-            passive: false
-        });
+        // ========== Button Handlers ==========
+        document.getElementById("btn-start-flow").onclick = () => {
+            if (typeof runFlowFromInputs === "function") runFlowFromInputs();
+        };
     </script>
     <script>
-// ========== EASY CONNECT MODE FOR MOBILE ==========
-let connectMode = {
-    fromNode: null,
-    fromSlot: null
-};
-
-// Saat user tap node pertama
-canvas.canvas.addEventListener("touchstart", function (e) {
-    if (e.touches.length !== 1) return;
-
-    const touch = e.touches[0];
-    const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
-    const node = graph.getNodeOnPos(cx, cy, 10, true);
-    if (!node) return;
-
-    // Jika belum ada koneksi, pilih output
-    if (!connectMode.fromNode) {
-        const outputSlots = node.outputs || [];
-        if (outputSlots.length === 1) {
-            connectMode.fromNode = node;
-            connectMode.fromSlot = 0;
-            canvas.selectNode(node);
-            canvas.setDirty(true, true);
-        } else if (outputSlots.length > 1) {
-            // TODO: tampilkan UI pilih slot jika lebih dari satu
-            alert("Node ini punya banyak output. Pilih slot dulu.");
+        // Fungsi untuk update status tombol delete (aktif/nonaktif)
+        function updateDeleteButtonState() {
+            const btn = document.getElementById("btn-delete-node");
+            if (canvas.selected_node) {
+                btn.disabled = false;
+                btn.classList.remove("disabled");
+            } else {
+                btn.disabled = true;
+                btn.classList.add("disabled");
+            }
         }
-        e.preventDefault();
-    } else {
-        // Jika sudah pilih from, sekarang pilih tujuan
-        const targetNode = node;
-        const inputSlots = targetNode.inputs || [];
-        if (inputSlots.length > 0) {
-            connectMode.fromNode.connect(connectMode.fromSlot, targetNode, 0);
-            connectMode = { fromNode: null, fromSlot: null };
-            canvas.setDirty(true, true);
-        }
-        e.preventDefault();
-    }
-}, { passive: false });
-
-// Reset mode jika user tap kosong
-canvas.canvas.addEventListener("touchend", (e) => {
-    if (!connectMode.fromNode) return;
-
-    setTimeout(() => {
-        connectMode = { fromNode: null, fromSlot: null };
-    }, 3000); // auto-reset setelah 3 detik
-}, { passive: false });
-</script>
-
+        // Pantau seleksi node
+        canvas.onNodeSelected = function(node) {
+            selectedNode = node;
+            canvas.selected_node = node;
+            updateDeleteButtonState();
+        };
+        canvas.onNodeDeselected = function() {
+            selectedNode = null;
+            canvas.selected_node = null;
+            updateDeleteButtonState();
+        };
+        // Inisialisasi awal
+        updateDeleteButtonState();
+        // Tombol delete
+        document.getElementById("btn-delete-node").addEventListener("click", () => {
+            const node = canvas.selected_node;
+            if (node && graph) {
+                graph.remove(node);
+                canvas.selected_node = null;
+                updateDeleteButtonState();
+                canvas.setDirty(true, true);
+            }
+        });
+    </script>
 </body>
 
 </html>

@@ -266,66 +266,56 @@ function createInputField(type, key, value, options = [], locked = false, widget
         if (widgetDef.options?.min !== undefined) input.min = widgetDef.options.min;
         if (widgetDef.options?.max !== undefined) input.max = widgetDef.options.max;
         if (widgetDef.options?.step !== undefined) input.step = widgetDef.options.step;
-} else if (type === "slider") {
-    const wrapper = document.createElement("div");
-    wrapper.className = "custom-slider-wrapper";
-    wrapper.dataset.key = key;
-
-    const track = document.createElement("div");
-    track.className = "custom-slider-track";
-
-    const fill = document.createElement("div");
-    fill.className = "custom-slider-fill";
-
-    const thumb = document.createElement("div");
-    thumb.className = "custom-slider-thumb";
-
-    const tooltip = document.createElement("div");
-    tooltip.className = "custom-slider-tooltip";
-
-    track.appendChild(fill);
-    track.appendChild(thumb);
-    track.appendChild(tooltip);
-    wrapper.appendChild(track);
-
-    let val = parseFloat(value) || 0;
-    const min = widgetDef.min ?? 0;
-    const max = widgetDef.max ?? 1;
-    const step = widgetDef.step ?? 0.01;
-
-    const updateSlider = (v) => {
-        val = Math.max(min, Math.min(max, v));
-        const percent = ((val - min) / (max - min)) * 100;
-        fill.style.width = percent + "%";
-        thumb.style.left = percent + "%";
-        tooltip.style.left = percent + "%";
-        tooltip.textContent = val.toFixed(2);
-    };
-
-    updateSlider(val);
-
-    let dragging = false;
-
-    const onMouseMove = (e) => {
-        if (!dragging) return;
-        const rect = track.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const percent = x / rect.width;
-        const raw = min + percent * (max - min);
-        const snapped = Math.round(raw / step) * step;
-        updateSlider(snapped);
-    };
-
-    thumb.addEventListener("mousedown", () => { dragging = true; });
-    document.addEventListener("mouseup", () => { dragging = false; });
-    document.addEventListener("mousemove", onMouseMove);
-
-    // For value saving later:
-    wrapper.getValue = () => val;
-    return wrapper;
-}
-
- else {
+    } else if (type === "slider") {
+        const wrapper = document.createElement("div");
+        wrapper.className = "custom-slider-wrapper";
+        wrapper.dataset.key = key;
+        const track = document.createElement("div");
+        track.className = "custom-slider-track";
+        const fill = document.createElement("div");
+        fill.className = "custom-slider-fill";
+        const thumb = document.createElement("div");
+        thumb.className = "custom-slider-thumb";
+        const tooltip = document.createElement("div");
+        tooltip.className = "custom-slider-tooltip";
+        track.appendChild(fill);
+        track.appendChild(thumb);
+        track.appendChild(tooltip);
+        wrapper.appendChild(track);
+        let val = parseFloat(value) || 0;
+        const min = widgetDef.min ?? 0;
+        const max = widgetDef.max ?? 1;
+        const step = widgetDef.step ?? 0.01;
+        const updateSlider = (v) => {
+            val = Math.max(min, Math.min(max, v));
+            const percent = ((val - min) / (max - min)) * 100;
+            fill.style.width = percent + "%";
+            thumb.style.left = percent + "%";
+            tooltip.style.left = percent + "%";
+            tooltip.textContent = val.toFixed(2);
+        };
+        updateSlider(val);
+        let dragging = false;
+        const onMouseMove = (e) => {
+            if (!dragging) return;
+            const rect = track.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percent = x / rect.width;
+            const raw = min + percent * (max - min);
+            const snapped = Math.round(raw / step) * step;
+            updateSlider(snapped);
+        };
+        thumb.addEventListener("mousedown", () => {
+            dragging = true;
+        });
+        document.addEventListener("mouseup", () => {
+            dragging = false;
+        });
+        document.addEventListener("mousemove", onMouseMove);
+        // For value saving later:
+        wrapper.getValue = () => val;
+        return wrapper;
+    } else {
         input = document.createElement("input");
         input.type = "text";
         input.value = value;
@@ -373,11 +363,11 @@ function saveNodeValue() {
     const fields = document.querySelectorAll("#modal-fields [data-key]");
     fields.forEach((input) => {
         const key = input.dataset.key;
-let actualInput = input;
-if (input.querySelector(".custom-slider-thumb")) {
-  actualInput = input;
-  value = input.getValue?.();
-}
+        let actualInput = input;
+        if (input.querySelector(".custom-slider-thumb")) {
+            actualInput = input;
+            value = input.getValue?.();
+        }
         const isNumber = actualInput.type === "number" || actualInput.type === "range";
         editingNode.properties[key] = isNumber ? parseFloat(actualInput.value) : actualInput.value;
     });
@@ -429,7 +419,6 @@ LiteGraph.ContextMenu = function () {
 function addNode() {
     const type = document.getElementById("nodeType").value;
     const node = LiteGraph.createNode(type);
-    node.pos = [Math.random() * 400 + 100, Math.random() * 300 + 100];
     graph.add(node);
 }
 // ========== FLOW EXECUTION ==========
