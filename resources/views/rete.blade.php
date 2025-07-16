@@ -7,6 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" />
     <link rel="stylesheet" href="{{ asset('css/flow.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 </head>
 
 <body>
@@ -329,6 +330,58 @@
             passive: false
         });
     </script>
+    <script>
+// ========== EASY CONNECT MODE FOR MOBILE ==========
+let connectMode = {
+    fromNode: null,
+    fromSlot: null
+};
+
+// Saat user tap node pertama
+canvas.canvas.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
+    const node = graph.getNodeOnPos(cx, cy, 10, true);
+    if (!node) return;
+
+    // Jika belum ada koneksi, pilih output
+    if (!connectMode.fromNode) {
+        const outputSlots = node.outputs || [];
+        if (outputSlots.length === 1) {
+            connectMode.fromNode = node;
+            connectMode.fromSlot = 0;
+            canvas.selectNode(node);
+            canvas.setDirty(true, true);
+        } else if (outputSlots.length > 1) {
+            // TODO: tampilkan UI pilih slot jika lebih dari satu
+            alert("Node ini punya banyak output. Pilih slot dulu.");
+        }
+        e.preventDefault();
+    } else {
+        // Jika sudah pilih from, sekarang pilih tujuan
+        const targetNode = node;
+        const inputSlots = targetNode.inputs || [];
+        if (inputSlots.length > 0) {
+            connectMode.fromNode.connect(connectMode.fromSlot, targetNode, 0);
+            connectMode = { fromNode: null, fromSlot: null };
+            canvas.setDirty(true, true);
+        }
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// Reset mode jika user tap kosong
+canvas.canvas.addEventListener("touchend", (e) => {
+    if (!connectMode.fromNode) return;
+
+    setTimeout(() => {
+        connectMode = { fromNode: null, fromSlot: null };
+    }, 3000); // auto-reset setelah 3 detik
+}, { passive: false });
+</script>
+
 </body>
 
 </html>
