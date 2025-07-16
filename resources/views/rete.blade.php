@@ -247,20 +247,45 @@
             return [(x - offset[0]) / scale, (y - offset[1]) / scale];
         };
         // ========== Drag Node ==========
-        canvas.canvas.addEventListener("touchstart", function(e) {
-            if (e.touches.length !== 1) return;
-            const touch = e.touches[0];
-            const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
-            const node = graph.getNodeOnPos(cx, cy, 10, true);
-            if (node) {
-                touchDraggingNode = node;
-                touchOffset = [cx - node.pos[0], cy - node.pos[1]];
-                canvas.selectNode(node);
-                e.preventDefault();
-            }
-        }, {
-            passive: false
-        });
+let longTapTimeout = null;
+let touchStartX = 0;
+let touchStartY = 0;
+
+canvas.canvas.addEventListener("touchstart", function(e) {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+
+    longTapTimeout = setTimeout(() => {
+        const [cx, cy] = canvas.convertEventToCanvasCoords(touch);
+        const node = graph.getNodeOnPos(cx, cy, 10, true);
+        if (node) {
+            canvas.selectNode(node);
+            openNodeContextMenu(node, [touch.clientX, touch.clientY]);
+        }
+    }, 600); // 600ms for long tap
+}, { passive: false });
+
+canvas.canvas.addEventListener("touchmove", function(e) {
+    if (!longTapTimeout) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartX;
+    const dy = touch.clientY - touchStartY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    if (distance > 10) {
+        clearTimeout(longTapTimeout); // batalkan jika gerakan terlalu besar
+        longTapTimeout = null;
+    }
+}, { passive: false });
+
+canvas.canvas.addEventListener("touchend", function() {
+    if (longTapTimeout) {
+        clearTimeout(longTapTimeout);
+        longTapTimeout = null;
+    }
+}, { passive: false });
+
         canvas.canvas.addEventListener("touchmove", function(e) {
             if (!touchDraggingNode) return;
             const touch = e.touches[0];
