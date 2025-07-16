@@ -262,9 +262,9 @@ canvas.canvas.addEventListener("touchstart", function(e) {
         const node = graph.getNodeOnPos(cx, cy, 10, true);
         if (node) {
             canvas.selectNode(node);
-            openNodeContextMenu(node, [touch.clientX, touch.clientY]);
+            openModal();
         }
-    }, 600); // 600ms for long tap
+    }, 600);
 }, { passive: false });
 
 canvas.canvas.addEventListener("touchmove", function(e) {

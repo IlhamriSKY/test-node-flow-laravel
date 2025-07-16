@@ -400,6 +400,7 @@ canvas.onNodeDeselected = () => {
     selectedNode = null;
 };
 canvas.onNodeDblClicked = function (node) {
+    if (window.innerWidth < 650) return;
     selectedNode = node;
     const isLocked = node._combo_autoconnect_info?.locked && node._combo_autoconnect_info?.source_id;
     if (isLocked) return;
