@@ -312,6 +312,51 @@
         // ✅ Pastikan interaksi diaktifkan
         canvas.ds.allow_interaction = true;
     </script>
+    <script>
+// ========== Pinch Zoom Canvas (Mobile Only) ==========
+let lastTouchDist = null;
+
+function getTouchDistance(e) {
+    const [t1, t2] = e.touches;
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.canvas.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+        lastTouchDist = getTouchDistance(e);
+        e.preventDefault();
+    }
+}, { passive: false });
+
+canvas.canvas.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2 && lastTouchDist != null) {
+        const newDist = getTouchDistance(e);
+        const zoomFactor = newDist / lastTouchDist;
+
+        const currentScale = canvas.ds.scale;
+        const newScale = Math.max(0.2, Math.min(currentScale * zoomFactor, 3));
+        canvas.ds.scale = newScale;
+        canvas.setDirty(true, true);
+
+        lastTouchDist = newDist;
+        e.preventDefault(); // prevent page zoom
+    }
+}, { passive: false });
+
+canvas.canvas.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+        lastTouchDist = null;
+    }
+}, { passive: false });
+
+// ✅ Disable default page zoom on gesture
+document.addEventListener("gesturestart", function (e) {
+    e.preventDefault();
+});
+</script>
+
 </body>
 
 </html>
