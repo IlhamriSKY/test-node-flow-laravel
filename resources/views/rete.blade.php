@@ -213,7 +213,7 @@
             if (duration > 500 && distance < 10) {
                 const touch = e.changedTouches[0];
                 const pos = [touch.clientX, touch.clientY];
-                const node = canvas.getNodeOnPos(pos[0], pos[1]);
+                const node = graph.getNodeOnPos(pos[0], pos[1]);
                 if (node) {
                     canvas.selectNode(node);
                     openNodeContextMenu(node, pos);
@@ -236,61 +236,81 @@
             }
         });
     </script>
-
     <script>
-        let draggingNode = null;
-let dragOffset = [0, 0];
-
-canvas.canvas.addEventListener("touchstart", function (e) {
-    const touch = e.touches[0];
-    const pos = [touch.clientX, touch.clientY];
-    const node = canvas.getNodeOnPos(pos[0], pos[1]);
-    if (node) {
-        canvas.selectNode(node);
-        selectedNode = node;
-        draggingNode = node;
-        const [nodeX, nodeY] = node.pos;
-        dragOffset = [
-            pos[0] - canvas.convertToCanvasX(nodeX),
-            pos[1] - canvas.convertToCanvasY(nodeY)
-        ];
-        e.preventDefault();
-    }
-});
-
-canvas.canvas.addEventListener("touchmove", function (e) {
-    if (!draggingNode) return;
-    const touch = e.touches[0];
-    const pos = [touch.clientX, touch.clientY];
-    const x = canvas.convertEventToCanvas(pos)[0] - dragOffset[0];
-    const y = canvas.convertEventToCanvas(pos)[1] - dragOffset[1];
-    draggingNode.pos = [x, y];
-    canvas.setDirty(true, true);
-    e.preventDefault();
-});
-
-canvas.canvas.addEventListener("touchend", function () {
-    draggingNode = null;
-});
-let pendingConnection = null;
-
-canvas.canvas.addEventListener("touchstart", (e) => {
-    const pos = [e.touches[0].clientX, e.touches[0].clientY];
-    const slot = canvas.getSlotOnPos(pos[0], pos[1]);
-    if (!slot) return;
-    const node = canvas.getNodeOnPos(pos[0], pos[1]);
-
-    if (slot[0] === LiteGraph.OUTPUT) {
-        pendingConnection = { node, slotIndex: slot[1] };
-    } else if (slot[0] === LiteGraph.INPUT && pendingConnection) {
-        const targetNode = node;
-        const inputSlot = slot[1];
-        pendingConnection.node.connect(pendingConnection.slotIndex, targetNode, inputSlot);
-        canvas.setDirty(true, true);
-        pendingConnection = null;
-    }
-});
-
+        // ========== Enable Touch Drag for Nodes on Mobile ==========
+        let touchDraggingNode = null;
+        let touchOffset = [0, 0];
+        // ✅ Helper: convert clientX/Y ke koordinat canvas LiteGraph
+        canvas.convertEventToCanvasCoords = function(e) {
+            const rect = canvas.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scale = canvas.ds.scale;
+            const offset = canvas.ds.offset;
+            return [
+                (x - offset[0]) / scale,
+                (y - offset[1]) / scale
+            ];
+        };
+        // ✅ Drag mulai
+        canvas.canvas.addEventListener("touchstart", function(e) {
+            const touch = e.touches[0];
+            const [canvasX, canvasY] = canvas.convertEventToCanvasCoords(touch);
+            const node = graph.getNodeOnPos(canvasX, canvasY, 10, true); // gunakan graph langsung
+            if (node) {
+                touchDraggingNode = node;
+                touchOffset = [
+                    canvasX - node.pos[0],
+                    canvasY - node.pos[1]
+                ];
+                canvas.selectNode(node);
+                e.preventDefault(); // cegah scroll
+            }
+        }, {
+            passive: false
+        });
+        // ✅ Drag berlangsung
+        canvas.canvas.addEventListener("touchmove", function(e) {
+            if (!touchDraggingNode) return;
+            const touch = e.touches[0];
+            const [canvasX, canvasY] = canvas.convertEventToCanvasCoords(touch);
+            touchDraggingNode.pos = [
+                canvasX - touchOffset[0],
+                canvasY - touchOffset[1]
+            ];
+            canvas.setDirty(true, true);
+            e.preventDefault(); // cegah scroll
+        }, {
+            passive: false
+        });
+        // ✅ Drag selesai
+        canvas.canvas.addEventListener("touchend", function() {
+            touchDraggingNode = null;
+        }, {
+            passive: false
+        });
+        // ✅ Tambahan penting: spoof MouseEvent agar LiteGraph tetap menangani
+        ["touchstart", "touchmove", "touchend"].forEach(type => {
+            canvas.canvas.addEventListener(type, e => {
+                const touch = e.changedTouches[0];
+                const eventType = {
+                    "touchstart": "mousedown",
+                    "touchmove": "mousemove",
+                    "touchend": "mouseup"
+                } [type];
+                const simulated = new MouseEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                canvas.canvas.dispatchEvent(simulated);
+            }, {
+                passive: false
+            });
+        });
+        // ✅ Pastikan interaksi diaktifkan
+        canvas.ds.allow_interaction = true;
     </script>
 </body>
 
