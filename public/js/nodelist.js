@@ -10,4 +10,5 @@ window.NODE_MODULES = [
     "/js/nodes/json_parser.js",
     "/js/nodes/logger.js",
     "/js/nodes/gemini_request.js",
+    "/js/nodes/deepseek_logo.js",
 ];
