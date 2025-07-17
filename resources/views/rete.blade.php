@@ -48,8 +48,20 @@
         <button id="btn-save-node">Save</button>
         <button id="btn-close-node" class="btn-close">Close</button>
     </div>
+    <div id="connect-modal" style="display:none;">
+        <h3>Connect Node</h3>
+        <label for="output-select">From Output</label>
+        <select id="output-select"></select>
+        <label for="target-node-select">To Node</label>
+        <select id="target-node-select"></select>
+        <label for="input-select">To Input</label>
+        <select id="input-select"></select>
+        <button id="connect-confirm-btn">Connect</button>
+        <button onclick="document.getElementById('connect-modal').style.display='none'" class="btn-close">Close</button>
+    </div>
     <div id="zoom-controls">
         <button title="Start Flow" id="btn-start-flow"><i class="fa fa-play"></i></button>
+        <button id="btn-open-connect-modal" title="Manual Connect"><i class="fa fa-link"></i></button>
         <button title="Delete Node" id="btn-delete-node"><i class="fa fa-trash"></i></button>
         <button title="Zoom In" id="btn-zoom-in"><i class="fa fa-plus"></i></button>
         <button title="Zoom Out" id="btn-zoom-out"><i class="fa fa-minus"></i></button>
@@ -387,6 +399,68 @@
         });
         // Inisialisasi status tombol
         updateDeleteButtonState();
+    </script>
+    <script>
+        document.getElementById("btn-open-connect-modal").onclick = () => {
+            const node = selectedNode;
+            if (!node) return alert("No node selected");
+            const outputSelect = document.getElementById("output-select");
+            outputSelect.innerHTML = "";
+            node.outputs?.forEach((o, i) => {
+                const opt = document.createElement("option");
+                opt.value = i;
+                opt.textContent = `${i}: ${o.name} [${o.type}]`;
+                outputSelect.appendChild(opt);
+            });
+            const targetNodeSelect = document.getElementById("target-node-select");
+            targetNodeSelect.innerHTML = "";
+            graph._nodes.forEach(n => {
+                if (n.id !== node.id) {
+                    const opt = document.createElement("option");
+                    opt.value = n.id;
+                    opt.textContent = n.title || n.type;
+                    targetNodeSelect.appendChild(opt);
+                }
+            });
+            // Isi input-select berdasarkan node & tipe
+            const inputSelect = document.getElementById("input-select");
+            const filterInputs = () => {
+                const targetId = +targetNodeSelect.value;
+                const target = graph.getNodeById(targetId);
+                const outIndex = +outputSelect.value;
+                const outType = node.outputs?.[outIndex]?.type;
+                inputSelect.innerHTML = "";
+                target?.inputs?.forEach((inp, i) => {
+                    if (!outType || !inp.type || inp.type === outType) {
+                        const opt = document.createElement("option");
+                        opt.value = i;
+                        opt.textContent = `${i}: ${inp.name} [${inp.type}]`;
+                        inputSelect.appendChild(opt);
+                    }
+                });
+            };
+            outputSelect.onchange = filterInputs;
+            targetNodeSelect.onchange = filterInputs;
+            outputSelect.onchange();
+            targetNodeSelect.onchange();
+            document.getElementById("connect-modal").style.display = "block";
+        };
+        document.getElementById("connect-confirm-btn").onclick = () => {
+            const source = selectedNode;
+            const outIndex = +document.getElementById("output-select").value;
+            const targetId = +document.getElementById("target-node-select").value;
+            const inIndex = +document.getElementById("input-select").value;
+            const target = graph.getNodeById(targetId);
+            const outType = source.outputs?.[outIndex]?.type;
+            const inType = target.inputs?.[inIndex]?.type;
+            if (!source || !target) return alert("Invalid nodes");
+            if (outType !== inType) {
+                return alert(`Incompatible types: ${outType} → ${inType}`);
+            }
+            source.connect(outIndex, target, inIndex);
+            canvas.setDirty(true, true);
+            document.getElementById("connect-modal").style.display = "none";
+        };
     </script>
 </body>
 

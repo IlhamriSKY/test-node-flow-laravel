@@ -42,9 +42,29 @@ const zoom = (factor) => {
 const zoomIn = () => zoom(1.2);
 const zoomOut = () => zoom(1 / 1.2);
 const resetZoom = () => {
-    canvas.ds.scale = 1;
-    canvas.draw(true, true);
+  canvas.ds.scale = 1;
+
+  let node = selectedNode;
+
+  if (!node) {
+    // Cari node custom/user_message
+    node = graph._nodes.find(n => n.type === "custom/user_message");
+  }
+
+  if (node) {
+    const [nodeX, nodeY] = node.pos;
+    const [nodeW, nodeH] = node.size ?? [100, LiteGraph.NODE_TITLE_HEIGHT || 50];
+    canvas.ds.offset = [
+      canvas.canvas.width / 2 / canvas.ds.scale - nodeX - nodeW / 2,
+      canvas.canvas.height / 2 / canvas.ds.scale - nodeY - nodeH / 2
+    ];
+  } else {
+    canvas.ds.offset = [0, 0];
+  }
+
+  canvas.draw(true, true);
 };
+
 // ========== DYNAMIC NODE LOADER ==========
 function isValidNodeDef(def) {
     return def && typeof def.type === "string" && (def.inputs || def.outputs);
