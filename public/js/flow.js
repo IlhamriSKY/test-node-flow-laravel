@@ -375,6 +375,8 @@ function saveNodeValue() {
     editingNode.setDirtyCanvas(true, true);
     closeModal();
 }
+document.getElementById("btn-save-node").addEventListener("click", saveNodeValue);
+document.getElementById("btn-close-node").addEventListener("click", closeModal);
 
 function closeModal() {
     editingNode = null;
