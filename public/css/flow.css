@@ -586,6 +586,13 @@ body {
     cursor: not-allowed;
 }
 
+#zoom-controls button.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+
 #connect-modal {
   position: fixed;
   left: 50%;

@@ -376,16 +376,31 @@
                 deleteBtn.classList.add("disabled");
             }
         }
+
+    function updateConnectButtonState() {
+        const connectBtn = document.getElementById("btn-open-connect-modal");
+        if (canvas.selected_node) {
+            connectBtn.disabled = false;
+            connectBtn.classList.remove("disabled");
+        } else {
+            connectBtn.disabled = true;
+            connectBtn.classList.add("disabled");
+        }
+    }
+
+
         // Event saat node dipilih
         canvas.onNodeSelected = function(node) {
             canvas.selected_node = node;
             selectedNode = node; // ← ini penting
             updateDeleteButtonState();
+             updateConnectButtonState();
         };
         // Event saat node tidak lagi dipilih
         canvas.onNodeDeselected = function() {
             canvas.selected_node = null;
             updateDeleteButtonState();
+            updateConnectButtonState();
         };
         // Klik tombol delete
         deleteBtn.addEventListener("click", () => {
@@ -399,6 +414,7 @@
         });
         // Inisialisasi status tombol
         updateDeleteButtonState();
+        updateConnectButtonState();
     </script>
     <script>
         document.getElementById("btn-open-connect-modal").onclick = () => {
