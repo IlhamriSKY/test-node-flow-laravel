@@ -70,6 +70,8 @@
     <!-- Ghost + Preview Card -->
     <div id="ghost-drag"></div>
     <div id="drag-preview"></div>
+    {{-- Toast --}}
+    <div id="toast-container"></div>
     {{-- Mobile sidebar --}}
     <button id="mobile-toggle-sidebar" style="display: none;">
         <i class="fas fa-bars"></i>
@@ -80,15 +82,34 @@
     <script src="{{ asset('js/minimap.js') }}"></script>
     <script src="{{ asset('js/flow.js') }}"></script>
     <script>
-        // Toolbar buttons
-        document.getElementById('btn-start-flow').onclick = runFlowFromInputs;
-        document.getElementById('btn-zoom-in').onclick = zoomIn;
-        document.getElementById('btn-zoom-out').onclick = zoomOut;
-        document.getElementById('btn-reset-view').onclick = resetZoom;
-    </script>
-    <script>
-        const dragPreview = document.getElementById("drag-preview");
+        // ========== Global Variables ==========
         let currentDraggingType = null;
+        let touchDraggingNode = null;
+        let touchOffset = [0, 0];
+        let connectMode = {
+            fromNode: null,
+            fromSlot: null
+        };
+        let lastTap = {
+            time: 0,
+            nodeId: null,
+            position: {
+                x: 0,
+                y: 0
+            }
+        };
+        const DOUBLE_TAP_DELAY = 300; // ms
+        const MAX_TAP_DISTANCE = 30; // px
+        // ========== DOM Elements ==========
+        const dragPreview = document.getElementById("drag-preview");
+        const deleteBtn = document.getElementById("btn-delete-node");
+        const connectBtn = document.getElementById("btn-open-connect-modal");
+        // ========== Helper Functions ==========
+        function isEditableNode(node) {
+            if (!node?.properties) return false;
+            const keys = Object.keys(node.properties);
+            return keys.length > 0 && typeof node.properties[keys[0]] !== "object";
+        }
 
         function convertEventToCanvasCoords(e, canvas) {
             const rect = canvas.canvas.getBoundingClientRect();
@@ -99,6 +120,21 @@
             return [(x - offset[0]) / scale, (y - offset[1]) / scale];
         }
 
+        function convertCanvasToGraphCoords(x, y) {
+            const scale = canvas.ds.scale;
+            const offset = canvas.ds.offset;
+            return [x / scale - offset[0], y / scale - offset[1]];
+        }
+
+        function eventToCanvasPos(e) {
+            const rect = canvas.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const scale = canvas.ds.scale;
+            const offset = canvas.ds.offset;
+            return [x / scale - offset[0], y / scale - offset[1]];
+        }
+        // ========== Node Grid Management ==========
         function renderNodeGrid() {
             const container = document.getElementById("node-grid");
             container.innerHTML = "";
@@ -143,25 +179,54 @@
                     });
                     container.appendChild(div);
                 });
-            // Tampilkan tombol toggle di mobile
-            if (window.innerWidth <= 650) {
-                document.getElementById('mobile-toggle-sidebar').style.display = 'block';
+            // Show/hide mobile toggle button based on screen size
+            document.getElementById('mobile-toggle-sidebar').style.display =
+                window.innerWidth <= 650 ? 'block' : 'none';
+        }
+
+        function refreshNodeTypeSelect() {
+            renderNodeGrid();
+        }
+        // ========== Button State Management ==========
+        function updateDeleteButtonState() {
+            if (canvas.selected_node) {
+                deleteBtn.disabled = false;
+                deleteBtn.classList.remove("disabled");
+            } else {
+                deleteBtn.disabled = true;
+                deleteBtn.classList.add("disabled");
             }
         }
+
+        function updateConnectButtonState() {
+            if (canvas.selected_node) {
+                connectBtn.disabled = false;
+                connectBtn.classList.remove("disabled");
+            } else {
+                connectBtn.disabled = true;
+                connectBtn.classList.add("disabled");
+            }
+        }
+        // ========== Node Selection Handlers ==========
+        canvas.onNodeSelected = function(node) {
+            canvas.selected_node = node;
+            selectedNode = node;
+            updateDeleteButtonState();
+            updateConnectButtonState();
+        };
+        canvas.onNodeDeselected = function() {
+            canvas.selected_node = null;
+            updateDeleteButtonState();
+            updateConnectButtonState();
+        };
+        // ========== Drag and Drop Handling ==========
         canvas.canvas.addEventListener("dragover", (e) => {
             e.preventDefault();
             if (!currentDraggingType) return;
-            // Ambil posisi mouse relatif ke canvas
             const rect = canvas.canvas.getBoundingClientRect();
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
-            // Pastikan mouse berada dalam area canvas (tidak negatif / keluar)
-            if (
-                mouseX >= 0 && mouseY >= 0 &&
-                mouseX <= rect.width &&
-                mouseY <= rect.height
-            ) {
-                // Baru aktifkan preview
+            if (mouseX >= 0 && mouseY >= 0 && mouseX <= rect.width && mouseY <= rect.height) {
                 if (dragPreview.dataset.ready === "false") {
                     dragPreview.style.display = "block";
                     dragPreview.dataset.ready = "true";
@@ -171,18 +236,6 @@
                 dragPreview.style.transform = `scale(${canvas.ds.scale})`;
             }
         });
-
-        function eventToCanvasPos(e) {
-            const rect = canvas.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const scale = canvas.ds.scale;
-            const offset = canvas.ds.offset;
-            return [
-                x / scale - offset[0],
-                y / scale - offset[1]
-            ];
-        }
         canvas.canvas.addEventListener("drop", (e) => {
             e.preventDefault();
             dragPreview.style.display = "none";
@@ -190,120 +243,13 @@
             if (!nodeType) return;
             const [canvasX, canvasY] = eventToCanvasPos(e);
             const node = LiteGraph.createNode(nodeType);
-            if (!node) return alert("Gagal membuat node: " + nodeType);
+            if (!node) return showToast(`Gagal membuat node: ${nodeType}`, 'error');
             node.pos = [canvasX, canvasY];
             graph.add(node);
             canvas.setDirty(true, true);
             currentDraggingType = null;
         });
-
-        function refreshNodeTypeSelect() {
-            renderNodeGrid();
-        }
-        window.addEventListener("load", () => {
-            initMinimap();
-        });
-        canvas.canvas.addEventListener("touchstart", (e) => {
-            touchStartTime = Date.now();
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        });
-        let lastTap = {
-            time: 0,
-            nodeId: null,
-            position: {
-                x: 0,
-                y: 0
-            }
-        };
-        const DOUBLE_TAP_DELAY = 300; // ms
-        const MAX_TAP_DISTANCE = 30; // px
-        canvas.canvas.addEventListener("touchend", function(e) {
-            if (e.cancelable) e.preventDefault();
-            const touch = e.changedTouches[0];
-            const currentTime = Date.now();
-            const currentNode = canvas.selected_node;
-            if (!currentNode) {
-                return;
-            }
-            const isDoubleTap =
-                lastTap.nodeId === currentNode.id &&
-                (currentTime - lastTap.time) < DOUBLE_TAP_DELAY &&
-                Math.abs(touch.clientX - lastTap.position.x) < MAX_TAP_DISTANCE &&
-                Math.abs(touch.clientY - lastTap.position.y) < MAX_TAP_DISTANCE;
-            lastTap = {
-                time: currentTime,
-                nodeId: currentNode.id,
-                position: {
-                    x: touch.clientX,
-                    y: touch.clientY
-                }
-            };
-            if (isDoubleTap) {
-                console.log("[DoubleTap] Membuka modal untuk:", currentNode.title || currentNode.type);
-                if (isEditableNode(currentNode)) {
-                    openModal();
-                } else {
-                    console.log("[DoubleTap] Node tidak editable.");
-                }
-            } else {
-                selectedNode = currentNode;
-            }
-        }, {
-            passive: false
-        });
-    </script>
-    <script>
-        // Di dalam script yang sudah ada, tambahkan:
-        document.getElementById('mobile-toggle-sidebar').addEventListener('click', function() {
-            document.getElementById('sidebar').classList.toggle('active');
-        });
-        // Handle window resize
-        window.addEventListener('resize', function() {
-            if (window.innerWidth > 650) {
-                document.getElementById('sidebar').classList.remove('active');
-                document.getElementById('mobile-toggle-sidebar').style.display = 'none';
-            } else {
-                document.getElementById('mobile-toggle-sidebar').style.display = 'block';
-            }
-        });
-    </script>
-    <script>
-        // ========== Core Canvas Interaction ==========
-        // Variabel utama
-        let touchDraggingNode = null;
-        let touchOffset = [0, 0];
-        let connectMode = {
-            fromNode: null,
-            fromSlot: null
-        };
-        let lastTapTime = 0;
-        let lastTapNode = null;
-        // Fungsi bantu
-        function isEditableNode(node) {
-            if (!node?.properties) return false;
-            const keys = Object.keys(node.properties);
-            return keys.length > 0 && typeof node.properties[keys[0]] !== "object";
-        }
-        canvas.ds.allow_interaction = true;
-        canvas.convertEventToCanvasCoords = function(e) {
-            const rect = canvas.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            const scale = canvas.ds.scale;
-            const offset = canvas.ds.offset;
-            return [(x - offset[0]) / scale, (y - offset[1]) / scale];
-        };
-
-        function convertCanvasToGraphCoords(x, y) {
-            const scale = canvas.ds.scale;
-            const offset = canvas.ds.offset;
-            return [
-                x / scale - offset[0],
-                y / scale - offset[1]
-            ];
-        }
-        // ========== Drag Node ==========
+        // ========== Touch Handling ==========
         canvas.canvas.addEventListener("touchstart", function(e) {
             if (e.touches.length !== 1) return;
             const touch = e.touches[0];
@@ -328,81 +274,36 @@
         }, {
             passive: false
         });
-        canvas.canvas.addEventListener("touchend", function() {
+        canvas.canvas.addEventListener("touchend", function(e) {
+            if (e.cancelable) e.preventDefault();
+            const touch = e.changedTouches[0];
+            const currentNode = canvas.selected_node;
+            if (currentNode) {
+                const currentTime = Date.now();
+                const isDoubleTap =
+                    lastTap.nodeId === currentNode.id &&
+                    (currentTime - lastTap.time) < DOUBLE_TAP_DELAY &&
+                    Math.abs(touch.clientX - lastTap.position.x) < MAX_TAP_DISTANCE &&
+                    Math.abs(touch.clientY - lastTap.position.y) < MAX_TAP_DISTANCE;
+                lastTap = {
+                    time: currentTime,
+                    nodeId: currentNode.id,
+                    position: {
+                        x: touch.clientX,
+                        y: touch.clientY
+                    }
+                };
+                if (isDoubleTap && isEditableNode(currentNode)) {
+                    openModal();
+                } else {
+                    selectedNode = currentNode;
+                }
+            }
             touchDraggingNode = null;
         }, {
             passive: false
         });
-        // ========== Spoof Mouse Events ==========
-        ["touchstart", "touchmove", "touchend"].forEach(type => {
-            canvas.canvas.addEventListener(type, e => {
-                const touch = e.changedTouches[0];
-                const eventType = {
-                    "touchstart": "mousedown",
-                    "touchmove": "mousemove",
-                    "touchend": "mouseup"
-                } [type];
-                const simulated = new MouseEvent(eventType, {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: touch.clientX,
-                    clientY: touch.clientY
-                });
-                canvas.canvas.dispatchEvent(simulated);
-            }, {
-                passive: false
-            });
-        });
-        // ========== Disable Gesture Zoom on Mobile ==========
-        document.addEventListener("gesturestart", e => e.preventDefault());
-        document.addEventListener("gesturechange", e => e.preventDefault());
-        document.addEventListener("gestureend", e => e.preventDefault());
-        // ========== Start Flow ==========
-        document.getElementById("btn-start-flow").onclick = () => {
-            if (typeof runFlowFromInputs === "function") runFlowFromInputs();
-        };
-    </script>
-    <script>
-        // ========== DELETE NODE SUPPORT ==========
-        // Tombol delete
-        const deleteBtn = document.getElementById("btn-delete-node");
-
-        function updateDeleteButtonState() {
-            if (canvas.selected_node) {
-                deleteBtn.disabled = false;
-                deleteBtn.classList.remove("disabled");
-            } else {
-                deleteBtn.disabled = true;
-                deleteBtn.classList.add("disabled");
-            }
-        }
-
-    function updateConnectButtonState() {
-        const connectBtn = document.getElementById("btn-open-connect-modal");
-        if (canvas.selected_node) {
-            connectBtn.disabled = false;
-            connectBtn.classList.remove("disabled");
-        } else {
-            connectBtn.disabled = true;
-            connectBtn.classList.add("disabled");
-        }
-    }
-
-
-        // Event saat node dipilih
-        canvas.onNodeSelected = function(node) {
-            canvas.selected_node = node;
-            selectedNode = node; // ← ini penting
-            updateDeleteButtonState();
-             updateConnectButtonState();
-        };
-        // Event saat node tidak lagi dipilih
-        canvas.onNodeDeselected = function() {
-            canvas.selected_node = null;
-            updateDeleteButtonState();
-            updateConnectButtonState();
-        };
-        // Klik tombol delete
+        // ========== Button Event Handlers ==========
         deleteBtn.addEventListener("click", () => {
             const node = canvas.selected_node;
             if (node && graph) {
@@ -412,14 +313,9 @@
                 canvas.setDirty(true, true);
             }
         });
-        // Inisialisasi status tombol
-        updateDeleteButtonState();
-        updateConnectButtonState();
-    </script>
-    <script>
         document.getElementById("btn-open-connect-modal").onclick = () => {
             const node = selectedNode;
-            if (!node) return alert("No node selected");
+            if (!node) return showToast("No node selected", 'warning');
             const outputSelect = document.getElementById("output-select");
             outputSelect.innerHTML = "";
             node.outputs?.forEach((o, i) => {
@@ -438,7 +334,6 @@
                     targetNodeSelect.appendChild(opt);
                 }
             });
-            // Isi input-select berdasarkan node & tipe
             const inputSelect = document.getElementById("input-select");
             const filterInputs = () => {
                 const targetId = +targetNodeSelect.value;
@@ -469,14 +364,80 @@
             const target = graph.getNodeById(targetId);
             const outType = source.outputs?.[outIndex]?.type;
             const inType = target.inputs?.[inIndex]?.type;
-            if (!source || !target) return alert("Invalid nodes");
-            if (outType !== inType) {
-                return alert(`Incompatible types: ${outType} → ${inType}`);
-            }
+            if (!source || !target) return showToast("Invalid nodes", 'error');
+            if (outType !== inType) return showToast(`Incompatible types: ${outType} → ${inType}`, 'error');
             source.connect(outIndex, target, inIndex);
             canvas.setDirty(true, true);
             document.getElementById("connect-modal").style.display = "none";
         };
+        // ========== Mobile Sidebar Handling ==========
+        document.getElementById('mobile-toggle-sidebar').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('active');
+        });
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 650) {
+                document.getElementById('sidebar').classList.remove('active');
+            }
+            document.getElementById('mobile-toggle-sidebar').style.display =
+                window.innerWidth <= 650 ? 'block' : 'none';
+        });
+        // ========== Other Event Handlers ==========
+        document.addEventListener("gesturestart", e => e.preventDefault());
+        document.addEventListener("gesturechange", e => e.preventDefault());
+        document.addEventListener("gestureend", e => e.preventDefault());
+        ["touchstart", "touchmove", "touchend"].forEach(type => {
+            canvas.canvas.addEventListener(type, e => {
+                const touch = e.changedTouches[0];
+                const eventType = {
+                    "touchstart": "mousedown",
+                    "touchmove": "mousemove",
+                    "touchend": "mouseup"
+                } [type];
+                const simulated = new MouseEvent(eventType, {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: touch.clientX,
+                    clientY: touch.clientY
+                });
+                canvas.canvas.dispatchEvent(simulated);
+            }, {
+                passive: false
+            });
+        });
+        // ========== Toolbar Button Handlers ==========
+        document.getElementById('btn-start-flow').onclick = runFlowFromInputs;
+        document.getElementById('btn-zoom-in').onclick = zoomIn;
+        document.getElementById('btn-zoom-out').onclick = zoomOut;
+        document.getElementById('btn-reset-view').onclick = resetZoom;
+        // ========== Initialization ==========
+        window.addEventListener("load", () => {
+            initMinimap();
+            renderNodeGrid();
+            updateDeleteButtonState();
+            updateConnectButtonState();
+            // Initialize canvas coordinate conversion
+            canvas.ds.allow_interaction = true;
+            canvas.convertEventToCanvasCoords = function(e) {
+                const rect = canvas.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const scale = canvas.ds.scale;
+                const offset = canvas.ds.offset;
+                return [(x - offset[0]) / scale, (y - offset[1]) / scale];
+            };
+        });
+        // ========== Toast Notification System ==========
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            // Auto-remove after animation
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
     </script>
 </body>
 

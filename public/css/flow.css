@@ -592,73 +592,120 @@ body {
     cursor: not-allowed;
 }
 
-
 #connect-modal {
-  position: fixed;
-  left: 50%;
-  top: 48%;
-  transform: translate(-50%, -50%);
-  background: var(--bg-main);
-  color: var(--text-main);
-  padding: 28px 22px 22px 22px;
-  border-radius: 14px;
-  min-width: 280px;
-  max-width: 340px;
-  width: 90vw;
-  box-shadow: 0 6px 38px rgba(0, 0, 0, 0.25), 0 1.5px 0 #00ffc342;
-  display: none;
-  z-index: 20;
-  font-family: inherit;
-  text-align: left;
+    position: fixed;
+    left: 50%;
+    top: 48%;
+    transform: translate(-50%, -50%);
+    background: var(--bg-main);
+    color: var(--text-main);
+    padding: 28px 22px 22px 22px;
+    border-radius: 14px;
+    min-width: 280px;
+    max-width: 340px;
+    width: 90vw;
+    box-shadow: 0 6px 38px rgba(0, 0, 0, 0.25), 0 1.5px 0 #00ffc342;
+    display: none;
+    z-index: 20;
+    font-family: inherit;
+    text-align: left;
 }
 
 #connect-modal h3 {
-  margin-top: 0;
-  margin-bottom: 16px;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--accent);
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent);
 }
 
 #connect-modal label {
-  display: block;
-  margin-top: 12px;
-  font-weight: 500;
-  font-size: 14px;
-  color: var(--text-secondary);
+    display: block;
+    margin-top: 12px;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-secondary);
 }
 
 #connect-modal select,
 #connect-modal button {
-  width: 100%;
-  padding: 13px;
-  background: var(--bg-main);
-  border: 1.5px solid var(--border-main);
-  color: var(--text-main);
-  font-size: 1rem;
-  border-radius: var(--radius);
-  margin-bottom: 12px;
-  font-family: inherit;
+    width: 100%;
+    padding: 13px;
+    background: var(--bg-main);
+    border: 1.5px solid var(--border-main);
+    color: var(--text-main);
+    font-size: 1rem;
+    border-radius: var(--radius);
+    margin-bottom: 12px;
+    font-family: inherit;
 }
 
 #connect-modal button {
-  background: var(--button-bg);
-  color: #181d1f;
-  font-weight: bold;
-  transition: background var(--transition);
-  cursor: pointer;
+    background: var(--button-bg);
+    color: #181d1f;
+    font-weight: bold;
+    transition: background var(--transition);
+    cursor: pointer;
 }
 
 #connect-modal button:hover {
-  background: var(--button-hover);
+    background: var(--button-hover);
 }
 
 #connect-modal .btn-close {
-  background: #3b3e47;
-  color: #e1e1e1;
+    background: #3b3e47;
+    color: #e1e1e1;
 }
 
 #connect-modal .btn-close:hover {
-  background: #50545f;
-  color: white;
+    background: #50545f;
+    color: white;
 }
+
+    /* Toast Notification */
+    #toast-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .toast {
+        padding: 12px 20px;
+        border-radius: 4px;
+        background-color: #333;
+        color: white;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+
+    .toast.error {
+        background-color: #d32f2f;
+    }
+
+    .toast.success {
+        background-color: #388e3c;
+    }
+
+    .toast.warning {
+        background-color: #f57c00;
+    }
+
+    .toast.info {
+        background-color: #1976d2;
+    }
+
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
