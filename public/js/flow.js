@@ -152,10 +152,11 @@ function registerCustomNodes(nodeDefs) {
             if (def.bgImageUrl) {
                 this.bgImage = new Image();
                 this.bgImage.src = def.bgImageUrl;
+
                 const drawLogo = function (ctx) {
                     if (this.bgImage.complete && this.bgImage.width > 0) {
-                        let width = 32,
-                            height = 32;
+                        let width = 32, height = 32;
+
                         const parseSize = (val, base) => {
                             if (typeof val === "string" && val.endsWith("%")) {
                                 const percent = parseFloat(val) / 100;
@@ -163,21 +164,27 @@ function registerCustomNodes(nodeDefs) {
                             }
                             return parseFloat(val) || base;
                         };
-                        const baseW = this.size[0];
-                        const baseH = this.size[1];
+
+                        const padding = 10;
+                        const availableW = this.size[0] - padding * 2;
+                        const availableH = this.size[1] - padding * 2;
+
                         if (typeof def.bgImageSize === "number" || typeof def.bgImageSize === "string") {
-                            width = height = parseSize(def.bgImageSize, Math.min(baseW, baseH));
+                            width = height = parseSize(def.bgImageSize, Math.min(availableW, availableH));
                         } else if (typeof def.bgImageSize === "object") {
-                            width = parseSize(def.bgImageSize.width, baseW);
-                            height = parseSize(def.bgImageSize.height, baseH);
+                            width = parseSize(def.bgImageSize.width, availableW);
+                            height = parseSize(def.bgImageSize.height, availableH);
                         }
-                        const x = (baseW - width) / 2;
-                        const y = (baseH - height) / 2;
+
+                        const x = padding + (availableW - width) / 2;
+                        const y = padding + (availableH - height) / 2;
+
                         ctx.save();
                         ctx.drawImage(this.bgImage, x, y, width, height);
                         ctx.restore();
                     }
                 };
+
                 this._originalDrawForeground = drawLogo;
                 this.onDrawForeground = drawLogo;
             }
